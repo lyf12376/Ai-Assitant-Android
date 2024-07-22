@@ -1,5 +1,8 @@
 package com.example.myapplication.page.chatPage
 
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.lifecycle.ViewModel
@@ -12,6 +15,8 @@ import com.example.myapplication.network.eachChatRecord.Block
 import com.example.myapplication.network.eachChatRecord.ChatRecordService
 import com.example.myapplication.network.eachChatRecord.Message
 import com.example.myapplication.network.uploadFile.UploadFileService
+import com.example.myapplication.utils.AppUtils
+import com.example.myapplication.utils.FilePathUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,7 +33,9 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import okio.BufferedSink
 import okio.ByteString
+import okio.source
 import java.io.File
 import javax.inject.Inject
 
@@ -42,15 +49,37 @@ class ChatPageViewModel @Inject constructor(
     private val _chatList = MutableStateFlow<List<Message>>(emptyList())
     val chatList = _chatList.asStateFlow()
 
-
     private val originalChatListMessage = MutableStateFlow(Message("assistant", emptyList()))
     private val _end = MutableStateFlow(true)
     val end = _end.asStateFlow()
 
     private val webSocket = MutableStateFlow<WebSocket?>(null)
 
-    private val _isCodeBlock = MutableStateFlow(false)
-    private val _tagNum = MutableStateFlow(0)
+    private val _showDialog = MutableStateFlow(false)
+    val showDialog = _showDialog.asStateFlow()
+
+    private val _dialogContent = MutableStateFlow("")
+    val dialogContent = _dialogContent.asStateFlow()
+
+    private val _uploadList = MutableStateFlow(emptyList<Pair<String,String>>())
+    val uploadList = _uploadList.asStateFlow()
+
+    /*
+    0：正在上传
+    1：上传成功
+    2：上传失败
+    */
+    private val _fileStatus = MutableStateFlow(emptyList<Int>())
+    val fileStatus = _fileStatus.asStateFlow()
+
+    fun showDialog(content:String){
+        _showDialog.value = true
+        _dialogContent.value = content
+    }
+
+    fun dismissDialog(){
+        _showDialog.value = false
+    }
 
     init {
         //initChatRecord()
@@ -249,17 +278,99 @@ class ChatPageViewModel @Inject constructor(
         }
     }
 
-    fun uploadFile(file:File){
+    fun uploadFile(uri: Uri, type: String, mode:Int) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO){
-                withContext(Dispatchers.IO){
-                    val fileExtension = MimeTypeMap.getFileExtensionFromUrl(file.absolutePath)
-                    val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(fileExtension)
-                    val requestFile: RequestBody = file.asRequestBody(mimeType?.toMediaTypeOrNull())
-                    val body: MultipartBody.Part = MultipartBody.Part.createFormData("file", file.name, requestFile)
-                    uploadFileService.uploadFile(Token.TOKEN, body)
+            withContext(Dispatchers.IO) {
+                if (mode == 1) {
+//                    Log.d("TAG", "uploadFile: ${uri.encodedPath}")
+
+                    // 处理从文件选择器获得的 URI
+                    val contentResolver = AppUtils.getApp().applicationContext.contentResolver
+                    val fileName = getFileName(contentResolver, uri)
+                    val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
+
+                    try {
+                        val requestBody = object : RequestBody() {
+                            override fun contentType() = mimeType.toMediaTypeOrNull()
+
+                            override fun writeTo(sink: BufferedSink) {
+                                contentResolver.openInputStream(uri)?.use { inputStream ->
+                                    sink.writeAll(inputStream.source())
+                                }
+                            }
+                        }
+
+                        _uploadList.value += Pair(fileName, type)
+                        _fileStatus.value += 0
+
+                        val body: MultipartBody.Part = MultipartBody.Part.createFormData("file", fileName, requestBody)
+                        val uploadResponse = uploadFileService.uploadFile(Token.TOKEN, body)
+                        Log.d("TAG", "uploadFile: ${uploadResponse.content}")
+                        if (uploadResponse.status) {
+                            val list = _fileStatus.value.toMutableList()
+                            list[list.size - 1] = 1
+                            _fileStatus.value = list.toList()
+                        } else {
+                            val list = _fileStatus.value.toMutableList()
+                            list[list.size - 1] = 2
+                            _fileStatus.value = list.toList()
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        val list = _fileStatus.value.toMutableList()
+                        list[list.size - 1] = 2
+                        _fileStatus.value = list.toList()
+                    }
+                } else {
+                    // 原有的文件路径处理逻辑
+                    val url = FilePathUtils.getRealFilePath(AppUtils.getApp().applicationContext, uri)
+                    var file: File?
+                    try {
+                        file = File(url)
+                        Log.d("TAG", "uploadFile:  ${file.absolutePath}")
+                        val fileExtension = MimeTypeMap.getFileExtensionFromUrl(file.absolutePath)
+                        val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(fileExtension)
+                        val requestFile: RequestBody = file.asRequestBody(mimeType?.toMediaTypeOrNull())
+                        _uploadList.value += Pair(file.name, type)
+                        _fileStatus.value += 0
+                        val body: MultipartBody.Part = MultipartBody.Part.createFormData("file", file.name, requestFile)
+                        val uploadResponse = uploadFileService.uploadFile(Token.TOKEN, body)
+                        if (uploadResponse.status) {
+                            val list = _fileStatus.value.toMutableList()
+                            list[list.size - 1] = 1
+                            _fileStatus.value = list.toList()
+                        } else {
+                            val list = _fileStatus.value.toMutableList()
+                            list[list.size - 1] = 2
+                            _fileStatus.value = list.toList()
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
             }
+        }
+    }
+
+    // 辅助函数：从 URI 获取文件名
+    private fun getFileName(contentResolver: ContentResolver, uri: Uri): String {
+        var fileName = "unknown"
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            cursor.moveToFirst()
+            fileName = cursor.getString(nameIndex)
+        }
+        return fileName
+    }
+
+    fun cancelFile(index:Int){
+        viewModelScope.launch {
+            val upload = _uploadList.value.toMutableList()
+            val status = _fileStatus.value.toMutableList()
+            upload.removeAt(index)
+            status.removeAt(index)
+            _uploadList.value = upload.toList()
+            _fileStatus.value = status.toList()
         }
     }
 

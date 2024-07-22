@@ -1,7 +1,8 @@
-package com.example.myapplication.utils.pictrueUtils
+package com.example.myapplication.utils.fileSelectUtils
 
 import android.Manifest
 import android.os.Build
+import android.util.Log
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.runtime.Composable
@@ -24,10 +25,11 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-class PhotoComponent {
+class FileComponent {
 
     private var openGalleryLauncher: ManagedActivityResultLauncher<Unit?, PictureResult>? = null
     private var takePhotoLauncher: ManagedActivityResultLauncher<Unit?, PictureResult>? = null
+    private var openDocumentLauncher: ManagedActivityResultLauncher<Unit?, DocumentResult>? = null
 
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -36,7 +38,7 @@ class PhotoComponent {
     }
 
     private object Helper {
-        val obj = PhotoComponent()
+        val obj = FileComponent()
     }
 
     //监听拍照权限flow
@@ -59,6 +61,63 @@ class PhotoComponent {
         }
     }
 
+    private val checkDocumentPermission = MutableSharedFlow<Boolean?>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    private fun setCheckDocumentPermissionState(value: Boolean?){
+        scope.launch {
+            checkDocumentPermission.emit(value)
+        }
+    }
+
+    @OptIn(ExperimentalPermissionsApi::class)
+    @Composable
+    fun SelectDocument(
+        documentCallback:(documentResult:DocumentResult)->Unit,
+        permissionRationale: ((document: Boolean) -> Unit)? = null,
+    ){
+        val rememberDocumentCallback = rememberUpdatedState(newValue = documentCallback)
+        openDocumentLauncher = rememberLauncherForActivityResult(contract = SelectDocument()) {
+            rememberDocumentCallback.value.invoke(it)
+        }
+
+        var permissionDocumentState by rememberSaveable { mutableStateOf(false) }
+//        val readDocumentPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+//            // 13以上的权限申请
+//            Manifest.permission.READ_EXTERNAL_STORAGE
+//        } else {
+//            Manifest.permission.READ_EXTERNAL_STORAGE
+//        }
+//        val documentPermissionState = rememberPermissionState(readDocumentPermission)
+
+        LaunchedEffect(Unit) {
+            checkDocumentPermission.collectLatest {
+                permissionDocumentState = it == true
+//                Log.d("TAG", "SelectDocument: ${documentPermissionState.status.isGranted}")
+                if (it == true) {
+                    setCheckDocumentPermissionState(null)
+                    openDocumentLauncher?.launch(null)
+//                    if (documentPermissionState.status.isGranted) {
+//                        setCheckDocumentPermissionState(null)
+//                        openDocumentLauncher?.launch(null)
+//                    } else if (documentPermissionState.status.shouldShowRationale) {
+//                        setCheckDocumentPermissionState(null)
+//                        permissionRationale?.invoke(true)
+//                    } else {
+//                        Log.d("tag", "SelectDocument: dddddddddd")
+//                        documentPermissionState.launchPermissionRequest()
+//                    }
+                }
+            }
+        }
+
+//        LaunchedEffect(documentPermissionState.status.isGranted) {
+//            if (documentPermissionState.status.isGranted && permissionDocumentState) {
+//                setCheckDocumentPermissionState(null)
+//                openDocumentLauncher?.launch(null)
+//            }
+//        }
+    }
+
     /**
      * @param galleryCallback 相册结果回调
      * @param graphCallback 拍照结果回调
@@ -71,6 +130,7 @@ class PhotoComponent {
         graphCallback: (graphResult: PictureResult) -> Unit,
         permissionRationale: ((gallery: Boolean) -> Unit)? = null,
     ) {
+        Log.d("TAG", "SelectImage: ")
         val rememberGraphCallback = rememberUpdatedState(newValue = graphCallback)
         val rememberGalleryCallback = rememberUpdatedState(newValue = galleryCallback)
         openGalleryLauncher = rememberLauncherForActivityResult(contract = SelectPicture()) {
@@ -146,6 +206,10 @@ class PhotoComponent {
     //调用拍照
     fun takePhoto() {
         setCheckCameraPermissionState(true)
+    }
+
+    fun selectDocument() {
+        setCheckDocumentPermissionState(true)
     }
 
 }

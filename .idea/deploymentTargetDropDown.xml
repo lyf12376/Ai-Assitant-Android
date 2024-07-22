@@ -5,6 +5,12 @@
       <entry key="ChatScreen">
         <State />
       </entry>
+      <entry key="InputTextField">
+        <State />
+      </entry>
+      <entry key="LoadingAnimation">
+        <State />
+      </entry>
       <entry key="MainActivity">
         <State />
       </entry>

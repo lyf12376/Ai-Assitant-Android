@@ -29,11 +29,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.myapplication.ui.theme.LightModeColor
 
 @Composable
 @Preview
 fun InputTextField(){
-    Column (modifier = Modifier.fillMaxWidth()){
+    Column (modifier = Modifier.fillMaxWidth().background(LightModeColor.BackGroundColor)){
         var currentMessage by remember { mutableStateOf(TextFieldValue("")) }
 
         Row(
@@ -76,8 +77,53 @@ fun InputTextField(){
                 }
             )
         }
-        Row {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ){
+            IconButton(
+                onClick = {
+                },
+                modifier = Modifier
+                    .padding(8.dp)
+                    .height(36.dp)
+                    .weight(1f)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.camera),
+                    contentDescription = null
+                )
+            }
+            IconButton(
+                onClick = {
+                },
+                modifier = Modifier
+                    .padding(8.dp)
+                    .height(36.dp)
 
+                    .weight(1f)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.picture),
+                    contentDescription = null
+                )
+            }
+            IconButton(
+                onClick = {
+                },
+                modifier = Modifier
+                    .padding(8.dp)
+                    .height(36.dp)
+                    .weight(1f)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.document),
+                    contentDescription = null
+                )
+            }
         }
     }
 }

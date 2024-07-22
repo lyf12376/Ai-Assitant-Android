@@ -1,9 +1,12 @@
 package com.example.myapplication.page.chatPage
 
+import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,10 +25,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
@@ -33,7 +36,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -45,24 +47,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ClipboardManager
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.R
+import com.example.myapplication.customView.LoadingAnimation
 import com.example.myapplication.network.eachChatRecord.Block
 import com.example.myapplication.utils.ClipBoardUtils
 import com.example.myapplication.utils.CodeBlock
 import com.example.myapplication.utils.highlightSyntax
+import com.example.myapplication.utils.fileSelectUtils.FileComponent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -71,6 +71,9 @@ fun ChatPage(chatPageViewModel: ChatPageViewModel = hiltViewModel()) {
     val chatList by chatPageViewModel.chatList.collectAsState()
     var currentMessage by remember { mutableStateOf(TextFieldValue("")) }
     val scope = rememberCoroutineScope()
+    val showDialog by chatPageViewModel.showDialog.collectAsState()
+    val dialogContent by chatPageViewModel.dialogContent.collectAsState()
+    val fileStatus by chatPageViewModel.fileStatus.collectAsState()
 
     fun sendMessage() {
         if (currentMessage.text.isNotEmpty()) {
@@ -80,6 +83,64 @@ fun ChatPage(chatPageViewModel: ChatPageViewModel = hiltViewModel()) {
             }
         }
     }
+
+    val mediaAction by lazy { FileComponent.instance }
+    var localImgPath by remember {
+        mutableStateOf(Uri.EMPTY)
+    }
+    var localDocumentPath by remember {
+        mutableStateOf(Uri.EMPTY)
+    }
+
+    val uploadList by chatPageViewModel.uploadList.collectAsState()
+
+    mediaAction.SelectImage(
+        galleryCallback = {
+            Log.d("TAG", "ChatPage: 相册内容${it.uri}")
+            if (it.isSuccess) {
+                localImgPath = it.uri
+                chatPageViewModel.uploadFile(localImgPath,"image",2)
+            }
+        },
+        graphCallback = {
+            Log.d("TAG", "ChatPage: 拍照内容${it.uri}")
+            if (it.isSuccess) {
+                localImgPath = it.uri
+                chatPageViewModel.uploadFile(localImgPath,"image",2)
+            }
+        },
+        permissionRationale = {
+            //权限拒绝的处理
+            chatPageViewModel.showDialog("未获得权限，无法访问相册")
+        }
+    )
+
+    mediaAction.SelectDocument(
+        documentCallback = {
+            Log.d("TAG", "ChatPage: 内容${it.uri}")
+            if (it.isSuccess) {
+                localDocumentPath = it.uri
+                chatPageViewModel.uploadFile(localDocumentPath,"document",1)
+            }
+        },
+        permissionRationale = {
+            chatPageViewModel.showDialog("未获得权限，无法访问文件")
+        }
+    )
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { chatPageViewModel.dismissDialog() },
+            title = { Text("错误") },
+            text = { Text(dialogContent) },
+            confirmButton = {
+                Button(onClick = { chatPageViewModel.dismissDialog() }) {
+                    Text("确定")
+                }
+            }
+        )
+    }
+
 
     Column(
         modifier = Modifier
@@ -96,6 +157,18 @@ fun ChatPage(chatPageViewModel: ChatPageViewModel = hiltViewModel()) {
                     AiMessage(message.content)
                 else
                     UserMessage(message.content)
+            }
+        }
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+                .padding(PaddingValues(top = 12.dp, bottom = 12.dp))
+        ) {
+            items(uploadList.size) { index->
+                FileCard(uploadList[index],fileStatus[index]){
+                    chatPageViewModel.cancelFile(index)
+                }
             }
         }
         Divider()
@@ -140,8 +213,55 @@ fun ChatPage(chatPageViewModel: ChatPageViewModel = hiltViewModel()) {
                 }
             )
         }
-        Row {
-
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+                .padding(PaddingValues(bottom = 8.dp)),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = {
+                    mediaAction.takePhoto()
+                },
+                modifier = Modifier
+                    .padding(8.dp)
+                    .height(36.dp)
+                    .weight(1f)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.camera),
+                    contentDescription = null
+                )
+            }
+            IconButton(
+                onClick = {
+                    mediaAction.selectImage()
+                },
+                modifier = Modifier
+                    .padding(8.dp)
+                    .height(36.dp)
+                    .weight(1f)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.picture),
+                    contentDescription = null
+                )
+            }
+            IconButton(
+                onClick = {
+                    mediaAction.selectDocument()
+                },
+                modifier = Modifier
+                    .padding(8.dp)
+                    .height(36.dp)
+                    .weight(1f)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.document),
+                    contentDescription = null
+                )
+            }
         }
     }
 }
@@ -164,9 +284,9 @@ fun UserMessage(message: List<Block>) {
                 )
         ) {
             message.forEach {
-                if (it.type == 0){
+                if (it.type == 0) {
                     MessageText(it.text)
-                }else if (it.type == 1) {
+                } else if (it.type == 1) {
                     val language = it.text.split("\n")[0]
                     val code = it.text.removeRange(0, language.length)
                     Code(code, language)
@@ -194,9 +314,9 @@ fun AiMessage(message: List<Block>) {
                 )
         ) {
             message.forEach {
-                if (it.type == 0){
+                if (it.type == 0) {
                     MessageText(it.text)
-                }else if (it.type == 1) {
+                } else if (it.type == 1) {
                     val language = it.text.split("\n")[0]
                     val code = it.text.removeRange(0, language.length)
                     Code(code, language)
@@ -207,7 +327,7 @@ fun AiMessage(message: List<Block>) {
 }
 
 @Composable
-fun IconWithBackground(isUser:Boolean,modifier: Modifier = Modifier) {
+fun IconWithBackground(isUser: Boolean, modifier: Modifier = Modifier) {
     Icon(
         painterResource(id = if (isUser) R.drawable.user else R.drawable.openai),
         tint = Color.Unspecified,
@@ -224,7 +344,7 @@ fun IconWithBackground(isUser:Boolean,modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun MessageText(text: String,modifier: Modifier = Modifier) {
+fun MessageText(text: String, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .wrapContentHeight()
@@ -247,8 +367,8 @@ fun Code(code: String, language: String) {
     }
     val circleSize = 20.dp
     val iconSize = 20.dp
-    LaunchedEffect (isCopied){
-        if (isCopied){
+    LaunchedEffect(isCopied) {
+        if (isCopied) {
             delay(5000)
             isCopied = false
         }
@@ -263,20 +383,23 @@ fun Code(code: String, language: String) {
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(modifier = Modifier.fillMaxWidth()) {
-                Column (Modifier.weight(1f)){
-                    CircleShapeBox(Color.Red, circleSize,
+                Column(Modifier.weight(1f)) {
+                    CircleShapeBox(
+                        Color.Red, circleSize,
                         Modifier
                             .align(Alignment.CenterHorizontally)
                     )
                 }
-                Column (Modifier.weight(1f)){
-                    CircleShapeBox(Color.Yellow, circleSize,
+                Column(Modifier.weight(1f)) {
+                    CircleShapeBox(
+                        Color.Yellow, circleSize,
                         Modifier
                             .align(Alignment.CenterHorizontally)
                     )
                 }
-                Column (Modifier.weight(1f)){
-                    CircleShapeBox(Color.Green, circleSize,
+                Column(Modifier.weight(1f)) {
+                    CircleShapeBox(
+                        Color.Green, circleSize,
                         Modifier
                             .align(Alignment.CenterHorizontally)
                     )
@@ -318,7 +441,7 @@ fun Code(code: String, language: String) {
 }
 
 @Composable
-fun CircleShapeBox(color: Color, size: Dp,modifier: Modifier) {
+fun CircleShapeBox(color: Color, size: Dp, modifier: Modifier) {
     Box(
         modifier = modifier
             .size(size)
@@ -341,16 +464,44 @@ fun CodeBlockComponent(codeBlock: CodeBlock) {
     }
 }
 
-
-
 @Composable
-@Preview
-fun ChatScreen() {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+fun FileCard(content: Pair<String, String>,fileStatus:Int,cancelFile:()->Unit) {
+    Log.d("TAG", "FileCard: ${content.first} ${content.second}")
+    Box(modifier = Modifier
+        .padding(PaddingValues(start = 12.dp))
+        .height(48.dp)
+        .background(color = if (fileStatus == 1) MaterialTheme.colorScheme.surface else Color.Black.copy(alpha = 0.3f), shape = RoundedCornerShape(12.dp))
     ) {
-
+        if (fileStatus == 0){
+            LoadingAnimation(modifier = Modifier.align(Alignment.Center))
+        }
+        Icon(imageVector = Icons.Default.Close, contentDescription = "取消文件", modifier = Modifier
+            .align(
+                Alignment.TopEnd
+            )
+            .padding(4.dp)
+            .size(16.dp)
+            .clickable {
+                cancelFile()
+            }
+        )
+        Row (
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(4.dp)){
+            Icon(
+                painterResource(id = if (content.second == "image") R.drawable.picture else R.drawable.document),
+                contentDescription = "",
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(text = content.first, fontSize = 18.sp, modifier = Modifier
+                .align(Alignment.CenterVertically)
+                .padding(
+                    PaddingValues(end = 12.dp)
+                ))
+        }
     }
 }
+
+
 

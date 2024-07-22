@@ -10,7 +10,7 @@ interface UploadFileService {
     @Multipart
     @POST("upload")
     suspend fun uploadFile(
-        @Header("token") token:String,
+        @Header("Authorization") token:String,
         @Part file: MultipartBody.Part
     ): UploadResponse
 }

@@ -90,4 +90,6 @@ dependencies {
     implementation (libs.androidx.hilt.navigation.compose)
 
     implementation(libs.accompanist.permissions)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
 }

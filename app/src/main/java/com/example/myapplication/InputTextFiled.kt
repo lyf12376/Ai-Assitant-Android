@@ -34,7 +34,9 @@ import com.example.myapplication.ui.theme.LightModeColor
 @Composable
 @Preview
 fun InputTextField(){
-    Column (modifier = Modifier.fillMaxWidth().background(LightModeColor.BackGroundColor)){
+    Column (modifier = Modifier
+        .fillMaxWidth()
+        .background(LightModeColor.BackGroundColor)){
         var currentMessage by remember { mutableStateOf(TextFieldValue("")) }
 
         Row(
@@ -127,3 +129,4 @@ fun InputTextField(){
         }
     }
 }
+

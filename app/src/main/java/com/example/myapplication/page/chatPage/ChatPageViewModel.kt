@@ -61,8 +61,20 @@ class ChatPageViewModel @Inject constructor(
     private val _dialogContent = MutableStateFlow("")
     val dialogContent = _dialogContent.asStateFlow()
 
+    /*
+    Pair<String,String>
+    前面代表文件名，后面代表类型，如Image，Document
+    */
     private val _uploadList = MutableStateFlow(emptyList<Pair<String,String>>())
     val uploadList = _uploadList.asStateFlow()
+
+    /*
+    上传成功的文件
+    Pair<String,String>
+    前面代表图片的url或者是经过提取的文件的内容，后面代表类型，如Image，Document
+    */
+    private val _successfulUpload = MutableStateFlow(emptyMap<Int,List<Pair<String,String>>>())
+    val successfulUpload = _successfulUpload.asStateFlow()
 
     /*
     0：正在上传
@@ -71,6 +83,9 @@ class ChatPageViewModel @Inject constructor(
     */
     private val _fileStatus = MutableStateFlow(emptyList<Int>())
     val fileStatus = _fileStatus.asStateFlow()
+
+    //上传文件列表的body列表，用于上传失败时重新上传
+    private val bodyList = mutableListOf<MultipartBody.Part>()
 
     fun showDialog(content:String){
         _showDialog.value = true
@@ -183,7 +198,14 @@ class ChatPageViewModel @Inject constructor(
 //                    Log.d("TAG", "handleIncomingMessage: $it")
 //                }
                 val blockList = extractedBlocks.map {
-                    if (it.startsWith("```")) {
+                    if (it.startsWith("```file")) {
+                        if (it.split("\n")[1].split(".")[1].contains("png") || it.split("\n")[1].split(".")[1].contains("jpg") || it.split("\n")[1].split(".")[1].contains("jpeg")|| it.split("\n")[1].split(".")[1].contains("webp"))
+                        {
+                            Block(text = it.removeSurrounding("```").trim(), type = 2)
+                        }
+                        Block(text = it.removeSurrounding("```").trim(), type = 3)
+                    }
+                    else if (it.startsWith("```")) {
                         Block(text = it.removeSurrounding("```").trim(), type = 1)
                     } else {
                         Block(text = it.trim(), type = 0)
@@ -203,6 +225,7 @@ class ChatPageViewModel @Inject constructor(
     private fun extractBlocks(message: String): List<String> {
         val extractedBlocks = mutableListOf<String>()
         var codeBlock = false
+        var photoBlock = false
         val lines = message.lines()
         var currentBlock = StringBuilder()
 
@@ -258,18 +281,28 @@ class ChatPageViewModel @Inject constructor(
     fun send(message:String) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
+                val frontMessage = _successfulUpload.value[_chatList.value.size - 1]?.joinToString("") {
+                    "```file\n[[${it.first.split("/").last()}]]\n${it.first}\n```\n"
+                } ?: ""
                 val chat =
-                    "{\"type\":\"chat\",\"message\":\"$message\",\"web\":false,\"model\":\"gpt-3.5-turbo\",\"context\":3,\"auto_use_coin\":true,\"ignore_context\":false,\"max_tokens\":2000,\"temperature\":0.6,\"top_p\":1,\"top_k\":5,\"presence_penalty\":0,\"frequency_penalty\":0,\"repetition_penalty\":1}"
-                try {
-                    webSocket.value?.send(chat)
-                }catch (e:Exception){
-                    reconnect()
+                    "{\"type\":\"chat\",\"message\":\"$frontMessage$message\",\"web\":false,\"model\":\"gpt-3.5-turbo\",\"context\":3,\"auto_use_coin\":true,\"ignore_context\":false,\"max_tokens\":2000,\"temperature\":0.6,\"top_p\":1,\"top_k\":5,\"presence_penalty\":0,\"frequency_penalty\":0,\"repetition_penalty\":1}"
+                Log.d("TAG", "send: $chat")
+                while (true){
+                    try {
+                        val isSuccess = webSocket.value?.send(chat)
+                        if (isSuccess == true)
+                            break
+                    }catch (e:Exception){
+                        reconnect()
+                    }
                 }
+
                 val extractedBlocks = extractBlocks(message)
                 val blockList = extractedBlocks.map {
-                    if (it.startsWith("```")) {
+                    if (it.startsWith("```")){
                         Block(text = it.removeSurrounding("```").trim(), type = 1)
-                    } else {
+                    }
+                    else {
                         Block(text = it.trim(), type = 0)
                     }
                 }
@@ -305,11 +338,14 @@ class ChatPageViewModel @Inject constructor(
 
                         val body: MultipartBody.Part = MultipartBody.Part.createFormData("file", fileName, requestBody)
                         val uploadResponse = uploadFileService.uploadFile(Token.TOKEN, body)
+                        bodyList.add(body)
                         Log.d("TAG", "uploadFile: ${uploadResponse.content}")
                         if (uploadResponse.status) {
                             val list = _fileStatus.value.toMutableList()
                             list[list.size - 1] = 1
                             _fileStatus.value = list.toList()
+                            _successfulUpload.value[_chatList.value.size - 1]?.toMutableList()
+                                ?.add(Pair(uploadResponse.content, type))
                         } else {
                             val list = _fileStatus.value.toMutableList()
                             list[list.size - 1] = 2
@@ -322,8 +358,8 @@ class ChatPageViewModel @Inject constructor(
                         _fileStatus.value = list.toList()
                     }
                 } else {
-                    // 原有的文件路径处理逻辑
                     val url = FilePathUtils.getRealFilePath(AppUtils.getApp().applicationContext, uri)
+                    Log.d("TAG", "uploadFile: $url")
                     var file: File?
                     try {
                         file = File(url)
@@ -335,10 +371,14 @@ class ChatPageViewModel @Inject constructor(
                         _fileStatus.value += 0
                         val body: MultipartBody.Part = MultipartBody.Part.createFormData("file", file.name, requestFile)
                         val uploadResponse = uploadFileService.uploadFile(Token.TOKEN, body)
+                        Log.d("TAG", "uploadFile: $uploadResponse")
+                        bodyList.add(body)
                         if (uploadResponse.status) {
                             val list = _fileStatus.value.toMutableList()
                             list[list.size - 1] = 1
                             _fileStatus.value = list.toList()
+                            _successfulUpload.value[_chatList.value.size - 1]?.toMutableList()
+                                ?.add(Pair(uploadResponse.content, type))
                         } else {
                             val list = _fileStatus.value.toMutableList()
                             list[list.size - 1] = 2
@@ -346,6 +386,9 @@ class ChatPageViewModel @Inject constructor(
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
+                        val list = _fileStatus.value.toMutableList()
+                        list[list.size - 1] = 2
+                        _fileStatus.value = list.toList()
                     }
                 }
             }
@@ -369,8 +412,30 @@ class ChatPageViewModel @Inject constructor(
             val status = _fileStatus.value.toMutableList()
             upload.removeAt(index)
             status.removeAt(index)
+            bodyList.removeAt(index)
             _uploadList.value = upload.toList()
             _fileStatus.value = status.toList()
+        }
+    }
+
+    fun reUploadFile(index: Int){
+        viewModelScope.launch {
+            val list = _fileStatus.value.toMutableList()
+            list[index] = 0
+            _fileStatus.value = list.toList()
+            val body = bodyList[index]
+            val uploadResponse = uploadFileService.uploadFile(Token.TOKEN, body)
+            if (uploadResponse.status) {
+                val list = _fileStatus.value.toMutableList()
+                list[index] = 1
+                _fileStatus.value = list.toList()
+                _successfulUpload.value[_chatList.value.size - 1]?.toMutableList()
+                    ?.add(Pair(uploadResponse.content, _uploadList.value[index].second))
+            } else {
+                val list = _fileStatus.value.toMutableList()
+                list[index] = 2
+                _fileStatus.value = list.toList()
+            }
         }
     }
 

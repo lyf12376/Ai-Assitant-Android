@@ -73,7 +73,7 @@ class ChatPageViewModel @Inject constructor(
     Pair<String,String>
     前面代表图片的url或者是经过提取的文件的内容，后面代表类型，如Image，Document
     */
-    private val _successfulUpload = MutableStateFlow(emptyMap<Int,List<Pair<String,String>>>())
+    private val _successfulUpload = MutableStateFlow(mutableMapOf<Int,List<Pair<String,String>>>())
     val successfulUpload = _successfulUpload.asStateFlow()
 
     /*
@@ -86,6 +86,9 @@ class ChatPageViewModel @Inject constructor(
 
     //上传文件列表的body列表，用于上传失败时重新上传
     private val bodyList = mutableListOf<MultipartBody.Part>()
+
+    private val _currentModel = MutableStateFlow("gpt-4o")
+    val currentModel = _currentModel.asStateFlow()
 
     fun showDialog(content:String){
         _showDialog.value = true
@@ -163,14 +166,14 @@ class ChatPageViewModel @Inject constructor(
 
                     override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                         super.onClosed(webSocket, code, reason)
-                        println("WebSocket已关闭: $code / $reason")
+                        Log.d("WebSocket已关闭:" ,"$code / $reason")
                         // 尝试重新连接
                         reconnect()
                     }
 
                     override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                         super.onFailure(webSocket, t, response)
-                        println("WebSocket连接失败: ${t.message}")
+                        Log.d("tag","WebSocket连接失败: ${t.message}")
                         // 尝试重新连接
                         reconnect()
                     }
@@ -273,26 +276,28 @@ class ChatPageViewModel @Inject constructor(
     }
 
     private fun reconnect() {
-        viewModelScope.launch {
-            initialWebSocket()
-        }
+        initialWebSocket()
     }
 
     fun send(message:String) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
+                Log.d("TAG", "send: ${_successfulUpload.value[_chatList.value.size - 1]}")
                 val frontMessage = _successfulUpload.value[_chatList.value.size - 1]?.joinToString("") {
                     "```file\n[[${it.first.split("/").last()}]]\n${it.first}\n```\n"
                 } ?: ""
+                Log.d("TAG", "send: $frontMessage")
                 val chat =
-                    "{\"type\":\"chat\",\"message\":\"$frontMessage$message\",\"web\":false,\"model\":\"gpt-3.5-turbo\",\"context\":3,\"auto_use_coin\":true,\"ignore_context\":false,\"max_tokens\":2000,\"temperature\":0.6,\"top_p\":1,\"top_k\":5,\"presence_penalty\":0,\"frequency_penalty\":0,\"repetition_penalty\":1}"
-                Log.d("TAG", "send: $chat")
+                    "{\"type\":\"chat\",\"message\":\"$frontMessage$message\",\"web\":false,\"model\":\"gpt-4o\",\"context\":3,\"auto_use_coin\":true,\"ignore_context\":false,\"max_tokens\":2000,\"temperature\":0.6,\"top_p\":1,\"top_k\":5,\"presence_penalty\":0,\"frequency_penalty\":0,\"repetition_penalty\":1}"
+//                Log.d("TAG", "send: $chat")
                 while (true){
                     try {
                         val isSuccess = webSocket.value?.send(chat)
+                        Log.d("TAG", "send: $isSuccess")
                         if (isSuccess == true)
                             break
                     }catch (e:Exception){
+                        e.printStackTrace()
                         reconnect()
                     }
                 }
@@ -307,6 +312,8 @@ class ChatPageViewModel @Inject constructor(
                     }
                 }
                 _chatList.value += Message("user", blockList)
+                _uploadList.value = emptyList()
+                _successfulUpload.value = mutableMapOf()
             }
         }
     }
@@ -337,15 +344,19 @@ class ChatPageViewModel @Inject constructor(
                         _fileStatus.value += 0
 
                         val body: MultipartBody.Part = MultipartBody.Part.createFormData("file", fileName, requestBody)
-                        val uploadResponse = uploadFileService.uploadFile(Token.TOKEN, body)
                         bodyList.add(body)
+                        val uploadResponse = uploadFileService.uploadFile(Token.TOKEN, body)
+                        _successfulUpload.value[_chatList.value.size - 1] = emptyList()
                         Log.d("TAG", "uploadFile: ${uploadResponse.content}")
                         if (uploadResponse.status) {
                             val list = _fileStatus.value.toMutableList()
                             list[list.size - 1] = 1
                             _fileStatus.value = list.toList()
-                            _successfulUpload.value[_chatList.value.size - 1]?.toMutableList()
-                                ?.add(Pair(uploadResponse.content, type))
+                            val l = _successfulUpload.value[_chatList.value.size - 1]?.toMutableList()
+                            l?.add(Pair(uploadResponse.content, type))
+                            if (l != null) {
+                                _successfulUpload.value[_chatList.value.size - 1] = l.toList()
+                            }
                         } else {
                             val list = _fileStatus.value.toMutableList()
                             list[list.size - 1] = 2
@@ -370,15 +381,20 @@ class ChatPageViewModel @Inject constructor(
                         _uploadList.value += Pair(file.name, type)
                         _fileStatus.value += 0
                         val body: MultipartBody.Part = MultipartBody.Part.createFormData("file", file.name, requestFile)
+                        bodyList.add(body)
                         val uploadResponse = uploadFileService.uploadFile(Token.TOKEN, body)
                         Log.d("TAG", "uploadFile: $uploadResponse")
-                        bodyList.add(body)
+                        _successfulUpload.value[_chatList.value.size - 1] = emptyList()
                         if (uploadResponse.status) {
                             val list = _fileStatus.value.toMutableList()
                             list[list.size - 1] = 1
                             _fileStatus.value = list.toList()
-                            _successfulUpload.value[_chatList.value.size - 1]?.toMutableList()
-                                ?.add(Pair(uploadResponse.content, type))
+                            val l = _successfulUpload.value[_chatList.value.size - 1]?.toMutableList()
+                            l?.add(Pair(uploadResponse.content, type))
+                            if (l != null) {
+                                _successfulUpload.value[_chatList.value.size - 1] = l.toList()
+                            }
+                            Log.d("TAG", "uploadFile: ${_successfulUpload.value[_chatList.value.size - 1]}")
                         } else {
                             val list = _fileStatus.value.toMutableList()
                             list[list.size - 1] = 2
@@ -429,14 +445,21 @@ class ChatPageViewModel @Inject constructor(
                 val list = _fileStatus.value.toMutableList()
                 list[index] = 1
                 _fileStatus.value = list.toList()
-                _successfulUpload.value[_chatList.value.size - 1]?.toMutableList()
-                    ?.add(Pair(uploadResponse.content, _uploadList.value[index].second))
+                val l = _successfulUpload.value[_chatList.value.size - 1]?.toMutableList()
+                l?.add(Pair(uploadResponse.content, _uploadList.value[index].second))
+                if (l != null) {
+                    _successfulUpload.value[_chatList.value.size - 1] = l.toList()
+                }
             } else {
                 val list = _fileStatus.value.toMutableList()
                 list[index] = 2
                 _fileStatus.value = list.toList()
             }
         }
+    }
+
+    fun changeModel(model:String){
+        _currentModel.value = model
     }
 
 }

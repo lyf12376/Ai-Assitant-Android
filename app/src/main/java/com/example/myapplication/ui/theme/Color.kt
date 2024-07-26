@@ -13,7 +13,7 @@ val Pink40 = Color(0xFF7D5260)
 
 object LightModeColor{
     val BackGroundColor = Color(0xfff4f4f4)
-
+    val TopBarColor = Color(0xFFF7F7F7)
 }
 
 object DarkModeColor{

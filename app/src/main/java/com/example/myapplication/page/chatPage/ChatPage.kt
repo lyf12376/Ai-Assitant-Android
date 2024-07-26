@@ -2,6 +2,7 @@ package com.example.myapplication.page.chatPage
 
 import android.net.Uri
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -21,7 +22,9 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -60,11 +63,15 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.example.myapplication.Const.ModelList.items
+import com.example.myapplication.Const.ScreenParam
 import com.example.myapplication.R
 import com.example.myapplication.customView.LoadingAnimation
 import com.example.myapplication.network.eachChatRecord.Block
+import com.example.myapplication.ui.theme.LightModeColor
 import com.example.myapplication.utils.ClipBoardUtils
 import com.example.myapplication.utils.CodeBlock
+import com.example.myapplication.utils.ScreenConstrainUtils
 import com.example.myapplication.utils.highlightSyntax
 import com.example.myapplication.utils.fileSelectUtils.FileComponent
 import kotlinx.coroutines.delay
@@ -80,6 +87,15 @@ fun ChatPage(chatPageViewModel: ChatPageViewModel = hiltViewModel()) {
     val fileStatus by chatPageViewModel.fileStatus.collectAsState() //文件上传状态
     val keyboardController = LocalSoftwareKeyboardController.current //键盘
     val successfulUpload by chatPageViewModel.successfulUpload.collectAsState()
+    val end by chatPageViewModel.end.collectAsState()
+    val listState = rememberLazyListState()
+    val currentModel by chatPageViewModel.currentModel.collectAsState()
+
+    LaunchedEffect (end){
+        if (!end){
+            listState.animateScrollToItem(chatList.size - 1)
+        }
+    }
 
     fun sendMessage() {
         if (currentMessage.text.isNotEmpty()) {
@@ -154,8 +170,12 @@ fun ChatPage(chatPageViewModel: ChatPageViewModel = hiltViewModel()) {
             .navigationBarsPadding()
             .statusBarsPadding()
     ) {
+        TopBar(currentModel = currentModel, onModelChange = {
+            chatPageViewModel.changeModel(it)
+        })
         LazyColumn(
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
+            state = listState
         ) {
             items(chatList.size) { index ->
                 val message = chatList[index]
@@ -295,7 +315,6 @@ fun UserMessage(message: List<Block>, fileList: List<Pair<String, String>> = emp
         IconWithBackground(true)
         Column(
             modifier = Modifier
-                .fillMaxWidth()
                 .padding(8.dp)
                 .background(
                     MaterialTheme.colorScheme.surface,
@@ -509,7 +528,7 @@ fun FileCard(content: Pair<String, String>, fileStatus: Int, cancelFile: () -> U
                     .align(Alignment.Center)
                     .size(46.dp)
                     .clickable {
-
+                        reUpload()
                     },
                 contentDescription = "刷新",
                 tint = Color.White
@@ -545,6 +564,10 @@ fun FileCard(content: Pair<String, String>, fileStatus: Int, cancelFile: () -> U
         }
     }
 }
+
+
+
+
 
 
 

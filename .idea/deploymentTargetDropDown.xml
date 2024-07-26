@@ -2,16 +2,16 @@
 <project version="4">
   <component name="deploymentTargetDropDown">
     <value>
-      <entry key="InputTextField">
-        <State />
-      </entry>
-      <entry key="LoadingAnimation">
-        <State />
-      </entry>
       <entry key="MainActivity">
         <State />
       </entry>
+      <entry key="TopBar">
+        <State />
+      </entry>
       <entry key="app">
+        <State />
+      </entry>
+      <entry key="topBar">
         <State />
       </entry>
     </value>

@@ -2,7 +2,6 @@ package com.example.myapplication.page.chatPage
 
 import android.net.Uri
 import android.util.Log
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -22,7 +21,6 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -44,7 +42,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,23 +59,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
-import com.example.myapplication.Const.ModelList.items
-import com.example.myapplication.Const.ScreenParam
 import com.example.myapplication.R
 import com.example.myapplication.customView.LoadingAnimation
 import com.example.myapplication.network.eachChatRecord.Block
-import com.example.myapplication.ui.theme.LightModeColor
 import com.example.myapplication.utils.ClipBoardUtils
 import com.example.myapplication.utils.CodeBlock
-import com.example.myapplication.utils.ScreenConstrainUtils
 import com.example.myapplication.utils.highlightSyntax
 import com.example.myapplication.utils.fileSelectUtils.FileComponent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun ChatPage(chatPageViewModel: ChatPageViewModel = hiltViewModel()) {
+fun ChatPage(navHostController: NavHostController,model:String,chatId:Int,chatPageViewModel: ChatPageViewModel = hiltViewModel()) {
+    LaunchedEffect(Unit) {
+        chatPageViewModel.changeModel(model)
+        chatPageViewModel.getChatId(chatId)
+    }
+    val id by chatPageViewModel.chatId.collectAsState()
     val chatList by chatPageViewModel.chatList.collectAsState()
     var currentMessage by remember { mutableStateOf(TextFieldValue("")) }
     val scope = rememberCoroutineScope()
@@ -144,9 +143,6 @@ fun ChatPage(chatPageViewModel: ChatPageViewModel = hiltViewModel()) {
                 localDocumentPath = it.uri
                 chatPageViewModel.uploadFile(localDocumentPath, "document", 1)
             }
-        },
-        permissionRationale = {
-            chatPageViewModel.showDialog("未获得权限，无法访问文件")
         }
     )
 
@@ -164,15 +160,17 @@ fun ChatPage(chatPageViewModel: ChatPageViewModel = hiltViewModel()) {
     }
 
 
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .navigationBarsPadding()
-            .statusBarsPadding()
     ) {
         TopBar(currentModel = currentModel, onModelChange = {
             chatPageViewModel.changeModel(it)
-        })
+        }){
+            navHostController.popBackStack()
+        }
         LazyColumn(
             modifier = Modifier.weight(1f),
             state = listState
@@ -182,12 +180,7 @@ fun ChatPage(chatPageViewModel: ChatPageViewModel = hiltViewModel()) {
                 if (message.role == "assistant")
                     AiMessage(message.content)
                 else {
-                    if (successfulUpload.containsKey(index)) {
-                        val list = successfulUpload[index]
-                        UserMessage(message.content, list!!)
-                    } else {
-                        UserMessage(message.content)
-                    }
+                    UserMessage(message = message.content)
                 }
             }
         }
@@ -306,7 +299,7 @@ fun ChatPage(chatPageViewModel: ChatPageViewModel = hiltViewModel()) {
 
 
 @Composable
-fun UserMessage(message: List<Block>, fileList: List<Pair<String, String>> = emptyList()) {
+fun UserMessage(message: List<Block>) {
     Row(
         modifier = Modifier
             .padding(16.dp)
@@ -328,6 +321,11 @@ fun UserMessage(message: List<Block>, fileList: List<Pair<String, String>> = emp
                     val language = it.text.split("\n")[0]
                     val code = it.text.removeRange(0, language.length)
                     Code(code, language)
+                }else if (it.type == 2){
+                    AsyncImage(
+                        model = it.text,
+                        contentDescription = "Image",
+                    )
                 }
             }
         }

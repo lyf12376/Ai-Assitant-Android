@@ -69,11 +69,9 @@ class FileComponent {
         }
     }
 
-    @OptIn(ExperimentalPermissionsApi::class)
     @Composable
     fun SelectDocument(
-        documentCallback:(documentResult:DocumentResult)->Unit,
-        permissionRationale: ((document: Boolean) -> Unit)? = null,
+        documentCallback: (documentResult: DocumentResult) -> Unit,
     ){
         val rememberDocumentCallback = rememberUpdatedState(newValue = documentCallback)
         openDocumentLauncher = rememberLauncherForActivityResult(contract = SelectDocument()) {
@@ -81,41 +79,16 @@ class FileComponent {
         }
 
         var permissionDocumentState by rememberSaveable { mutableStateOf(false) }
-//        val readDocumentPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-//            // 13以上的权限申请
-//            Manifest.permission.READ_EXTERNAL_STORAGE
-//        } else {
-//            Manifest.permission.READ_EXTERNAL_STORAGE
-//        }
-//        val documentPermissionState = rememberPermissionState(readDocumentPermission)
 
         LaunchedEffect(Unit) {
             checkDocumentPermission.collectLatest {
                 permissionDocumentState = it == true
-//                Log.d("TAG", "SelectDocument: ${documentPermissionState.status.isGranted}")
                 if (it == true) {
                     setCheckDocumentPermissionState(null)
                     openDocumentLauncher?.launch(null)
-//                    if (documentPermissionState.status.isGranted) {
-//                        setCheckDocumentPermissionState(null)
-//                        openDocumentLauncher?.launch(null)
-//                    } else if (documentPermissionState.status.shouldShowRationale) {
-//                        setCheckDocumentPermissionState(null)
-//                        permissionRationale?.invoke(true)
-//                    } else {
-//                        Log.d("tag", "SelectDocument: dddddddddd")
-//                        documentPermissionState.launchPermissionRequest()
-//                    }
                 }
             }
         }
-
-//        LaunchedEffect(documentPermissionState.status.isGranted) {
-//            if (documentPermissionState.status.isGranted && permissionDocumentState) {
-//                setCheckDocumentPermissionState(null)
-//                openDocumentLauncher?.launch(null)
-//            }
-//        }
     }
 
     /**

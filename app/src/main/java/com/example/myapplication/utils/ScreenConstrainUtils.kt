@@ -8,14 +8,14 @@ import com.example.myapplication.Const.ScreenParam
 
 object ScreenConstrainUtils {
     @Composable
-    fun getScreenWidthHeight() {
+    fun GetScreenWidthHeight() {
         val configuration = LocalConfiguration.current
         ScreenParam.screenWidthDp = configuration.screenWidthDp
         ScreenParam.screenHeightDp = configuration.screenHeightDp
     }
 
     @Composable
-    fun getScreenMetrics() {
+    fun GetScreenMetrics() {
         val context = LocalContext.current
         val displayMetrics = context.resources.displayMetrics
 

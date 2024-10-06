@@ -1,8 +1,11 @@
 package com.example.myapplication
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,11 +19,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,6 +44,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -151,8 +160,8 @@ fun InputTextField() {
 
 @Composable
 fun TopBarTest() {
-    ScreenConstrainUtils.getScreenWidthHeight()
-    ScreenConstrainUtils.getScreenMetrics()
+    ScreenConstrainUtils.GetScreenWidthHeight()
+    ScreenConstrainUtils.GetScreenMetrics()
     ScreenParam.logAll()
     var showBar by remember {
         mutableStateOf(false)
@@ -283,4 +292,57 @@ fun modelItem(modifier: Modifier, text: String,onclick:(select:String)->Unit,sel
                 selectFinish()
             }
     )
+}
+
+@Composable
+@Preview
+fun SwipeableCard() {
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    val animatedOffsetX by animateFloatAsState(targetValue = offsetX, label = "")
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(200.dp)
+            .padding(16.dp)
+            .graphicsLayer(translationX = animatedOffsetX)
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { _, dragAmount ->
+                    offsetX += dragAmount
+                    // 限制滑动范围
+                    offsetX = offsetX.coerceIn(-200f, 200f)
+                }
+            }
+    ) {
+        Box(
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Swipe me left or right")
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+@Preview
+fun CardPager() {
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { 5 })
+
+    HorizontalPager(
+        state = pagerState,
+        modifier = Modifier.fillMaxSize()
+    ) { page ->
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .padding(16.dp)
+        ) {
+            Box(
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Card ${page + 1}")
+            }
+        }
+    }
 }

@@ -2,6 +2,7 @@ package com.example.myapplication.daggerHilt
 
 import android.content.Context
 import com.coder.vincent.sharp_retrofit.call_adapter.flow.FlowCallAdapterFactory
+import com.example.myapplication.database.chatHistory.ChatHistoryDatabase
 import com.example.myapplication.network.chatList.ChatListService
 import com.example.myapplication.network.eachChatRecord.ChatRecordService
 import com.example.myapplication.network.uploadFile.UploadFileService
@@ -81,4 +82,14 @@ object AppModule {
     fun provideChatRecordService(@Named("chat") retrofit: Retrofit):ChatRecordService{
         return retrofit.create(ChatRecordService::class.java)
     }
+
+    @Singleton
+    @Provides
+    fun provideChatHistoryDatabase(@ApplicationContext context: Context): ChatHistoryDatabase {
+        return ChatHistoryDatabase.getDatabase(context)
+    }
+
+    @Singleton
+    @Provides
+    fun provideChatHistoryDao(database: ChatHistoryDatabase) = database.chatHistoryDao()
 }

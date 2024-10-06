@@ -1,5 +1,7 @@
 package com.example.myapplication.network.eachChatRecord
 
+import kotlinx.serialization.Serializable
+
 data class ChatRecord(
     val data: Data,
     val message: String,
@@ -29,6 +31,7 @@ data class Message(
     val content: List<Block>
 )
 
+@Serializable
 data class Block(
     val text: String,
     val type:Int

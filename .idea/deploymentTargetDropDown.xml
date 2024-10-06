@@ -2,7 +2,13 @@
 <project version="4">
   <component name="deploymentTargetDropDown">
     <value>
+      <entry key="ChatRecordItem">
+        <State />
+      </entry>
       <entry key="MainActivity">
+        <State />
+      </entry>
+      <entry key="RecordPage">
         <State />
       </entry>
       <entry key="TopBar">
